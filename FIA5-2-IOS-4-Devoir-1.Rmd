@@ -116,15 +116,11 @@ df1 <- df %>%
         Timestamp_start = `Timestamp start`,
         Timestamp_end   = `Timestamp end`)
 
-# Create column TYPE with PATIENT and ACTEUR
+# Create column TYPE with PATIENT
 df1 <- df1 %>%
   mutate(
-    TYPE = ifelse(
-      is.na(Ress_Humaines) | trimws(Ress_Humaines) == "",
-      "PATIENT",
-      "ACTEUR"
+    TYPE = "PATIENT"
     )
-  )
 df1
 
 # Copy dataframe
@@ -212,6 +208,16 @@ df4 <- df3 %>%
   )
 
 df4
+
+# Create columns WITH_1 et WITH_2
+df5 <- df4 %>%
+  mutate(
+    agents_split = str_split(Ress_Humaines, " - "),
+    WITH_1 = sapply(agents_split, function(x) if(length(x) >= 1) str_remove(x[1], "^Op\\d+ : ") %>% str_trim() else NA_character_),
+    WITH_2 = sapply(agents_split, function(x) if(length(x) >= 2) str_remove(x[2], "^Op\\d+ : ") %>% str_trim() else NA_character_)
+  ) %>%
+  select(-agents_split)
+df5
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
