@@ -58,6 +58,7 @@ library(tidyverse)
 library(data.table)
 
 load("local_data/trace_example_1.RData")
+
 ```
 
 ### Question 1) Mise en forme des données (*Preprocessing*) (/6)
@@ -74,7 +75,9 @@ Ici, on cherche à obtenir les données avec les colonnes / variables suivantes 
 
 -   Les localisations ont été renommées avec :
 
-        c("Entree_Generale","Accueil_Prio_1","Accueil_General_1", "Accueil_General_2","Accueil_General_3","Accueil_Attente", "Sortie_Attente","Sortie_Bureau_1","Sortie_Bureau_2", "Sortie_Generale","Uro_Box_1","Uro_Box_2","Uro_Box_3", "Uro_Box_4","Uro_Box_5","Uro_Box_6","Uro_Box_7", "Uro_Bureau_Annonce_1","Uro_Bureau_IDE_1","Uro_Debimetrie_1", "Uro_Examen_1","Uro_Examen_2","Uro_Examen_3","Uro_Attente_1")
+    ```         
+    c("Entree_Generale","Accueil_Prio_1","Accueil_General_1", "Accueil_General_2","Accueil_General_3","Accueil_Attente", "Sortie_Attente","Sortie_Bureau_1","Sortie_Bureau_2", "Sortie_Generale","Uro_Box_1","Uro_Box_2","Uro_Box_3", "Uro_Box_4","Uro_Box_5","Uro_Box_6","Uro_Box_7", "Uro_Bureau_Annonce_1","Uro_Bureau_IDE_1","Uro_Debimetrie_1", "Uro_Examen_1","Uro_Examen_2","Uro_Examen_3","Uro_Attente_1")
+    ```
 
 -   NEXT_LOCATION (character) : Prochaine localisation (lorsque l'agent est en déplacement)
 
@@ -99,8 +102,25 @@ trace_example_1
 *Entrez votre texte ici*
 
 ```{r answer 1.a}
-data <- read_excel("Log_Patient_URO_12112015.xlsx")
 
+# Set dataframe with dataset Log Patient URO
+df <- read_excel("Log_Patient_URO_12112015.xlsx")
+df
+
+#See dataframe column names
+names(df)
+
+#Create column TYPE with PATIENT and ACTEUR
+df1 <- df %>%
+  mutate(
+    `Ress. Humaines` = ifelse(`Ress. Humaines` == "NA", NA, `Ress. Humaines`),
+    TYPE = ifelse(
+      is.na(`Ress. Humaines`) | trimws(`Ress. Humaines`) == "",
+      "PATIENT",
+      "ACTEUR"
+    )
+  ) 
+df1
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
