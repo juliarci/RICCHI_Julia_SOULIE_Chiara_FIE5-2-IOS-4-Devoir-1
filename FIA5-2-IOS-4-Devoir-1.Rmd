@@ -195,6 +195,23 @@ df3
 df3 <- df3 %>% mutate(NEXT_LOCATION = lead(CURRENT_LOCATION))
 
 df3
+
+
+library(dplyr)
+
+# Create column that indicates the current step for each patient.
+df4 <- df3 %>%
+  mutate(
+    CURRENT_OPERATION_NUMBER = case_when(
+      format(`début op1`, "%H:%M:%S") != "00:00:00" & format(`début op2`, "%H:%M:%S") == "00:00:00" ~ 1,
+      format(`début op2`, "%H:%M:%S") != "00:00:00" & format(`début op3`, "%H:%M:%S") == "00:00:00" ~ 2,
+      format(`début op3`, "%H:%M:%S") != "00:00:00" & format(`début op4`, "%H:%M:%S") == "00:00:00" ~ 3,
+      format(`début op4`, "%H:%M:%S") != "00:00:00" ~ 4,
+      TRUE ~ NA_integer_
+    )
+  )
+
+df4
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
