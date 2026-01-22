@@ -234,6 +234,42 @@ De plus, il vous est demandé d'identifier toutes les erreurs de données potent
 
 ```{r answer 1.b}
 #_Entrez votre code R ici_
+
+# a) Comptage des valeurs manquantes par colonne
+missing_summary <- sapply(df3, function(x) sum(is.na(x)))
+print("Missing values per column:")
+print(missing_summary)
+
+# b) Valeurs aberrantes
+# Exemple : Durées ou distances impossibles
+aberrant_distances <- df3 %>% filter(`distance parcourue` > 100)                          # distance > 100 km
+
+dfDuration <- df3 %>%
+  mutate(
+    Duration_Op1 = as.numeric(`fin op1` - `début op1` , units = "mins"),
+    Duration_Op2 = as.numeric( `fin op2`  - `début op2`, units = "mins"),
+    Duration_Op3 = as.numeric(`fin op3`  - `début op3`, units = "mins"),
+    Duration_Op4 = as.numeric(`fin op4`  - `début op4`, units = "mins")
+  )
+
+aberrant_durations <- dfDuration %>%
+  filter(Duration_Op1 > 480 | Duration_Op2 > 480 | Duration_Op3 > 480 | Duration_Op4 > 480)
+
+print("Rows with aberrant durations:")
+print(aberrant_durations)
+print("Rows with aberrant distances:")
+print(aberrant_distances)
+
+# c) Valeurs incohérentes : chevauchements ou fin avant début
+inconsistent_times <- df3 %>% filter(
+  `fin op1` < `début op1` |
+  `fin op2` < `début op2` |
+  `début op2` < `fin op1` |
+  `début op3` < `fin op2`
+)
+
+print("Rows with inconsistent dates/times:")
+print(inconsistent_times)
 ```
 
 ### Question 2) Dénombrements (/1)
