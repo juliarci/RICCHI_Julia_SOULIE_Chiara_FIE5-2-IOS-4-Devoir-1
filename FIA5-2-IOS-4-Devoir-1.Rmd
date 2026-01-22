@@ -103,23 +103,26 @@ trace_example_1
 
 ```{r answer 1.a}
 
-# Set dataframe with dataset Log Patient URO
+# Set dataFrame with dataSet Log Patient URO
 df <- read_excel("Log_Patient_URO_12112015.xlsx")
 df
 
-#See dataframe column names
+#See dataFrame column names
 names(df)
 
-#Create column TYPE with PATIENT and ACTEUR
+#Change column name to be traited
 df1 <- df %>%
+  rename(Ress_Humaines = `Ress. Humaines`)
+
+#Create column TYPE with PATIENT and ACTEUR
+df1 <- df1 %>%
   mutate(
-    `Ress. Humaines` = ifelse(`Ress. Humaines` == "NA", NA, `Ress. Humaines`),
     TYPE = ifelse(
-      is.na(`Ress. Humaines`) | trimws(`Ress. Humaines`) == "",
+      is.na(Ress_Humaines) | trimws(Ress_Humaines) == "",
       "PATIENT",
       "ACTEUR"
     )
-  ) 
+  )
 df1
 ```
 
