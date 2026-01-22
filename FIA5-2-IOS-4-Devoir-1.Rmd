@@ -107,14 +107,16 @@ trace_example_1
 df <- read_excel("Log_Patient_URO_12112015.xlsx")
 df
 
-#See dataFrame column names
+# See dataFrame column names
 names(df)
 
-#Change column name to be traited
+# Change columns names to be traited
 df1 <- df %>%
-  rename(Ress_Humaines = `Ress. Humaines`)
+   rename(Ress_Humaines = `Ress. Humaines`,
+        Timestamp_start = `Timestamp start`,
+        Timestamp_end   = `Timestamp end`)
 
-#Create column TYPE with PATIENT and ACTEUR
+# Create column TYPE with PATIENT and ACTEUR
 df1 <- df1 %>%
   mutate(
     TYPE = ifelse(
@@ -126,7 +128,7 @@ df1 <- df1 %>%
 df1
 
 # Copy dataframe
-df2 <- copy(df)
+df2 <- copy(df1)
 
 # Mapping old names with new names
 ancien <- c(
@@ -172,10 +174,27 @@ df2$Activity_DETAILS <- factor(
   levels = ancien,
   labels = nouveau
 )
+df2
 
 # Verify the result
 unique(df2$Activity_DETAILS)
 
+# ASC timestamp
+df3 <- df2 %>%
+  arrange(Timestamp_start)
+df3
+
+# Create column CURRENT_LOCATION
+df3 <- df3 %>%
+  mutate(
+    CURRENT_LOCATION = Activity_DETAILS
+  )
+df3
+
+# Create column NEXT_LOCATION
+df3 <- df3 %>% mutate(NEXT_LOCATION = lead(CURRENT_LOCATION))
+
+df3
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
