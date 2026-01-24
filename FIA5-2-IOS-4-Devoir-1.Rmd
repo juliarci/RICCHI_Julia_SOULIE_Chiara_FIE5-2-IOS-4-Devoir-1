@@ -58,6 +58,7 @@ library(tidyverse)
 library(data.table)
 
 load("local_data/trace_example_1.RData")
+load("local_data/trace_example_final.RData")
 
 ```
 
@@ -230,46 +231,67 @@ De plus, il vous est demandé d'identifier toutes les erreurs de données potent
 
 #### Réponse :
 
-*Entrez votre texte ici*
+```         
+Entrez votre texte ici
+```
 
 ```{r answer 1.b}
 #_Entrez votre code R ici_
 
+library(readr)
+
+df <- read_csv2("local_data/trace_example_final.csv")
+
+df
+
 # a) Comptage des valeurs manquantes par colonne
-missing_summary <- sapply(df3, function(x) sum(is.na(x)))
+missing_summary <- sapply(df, function(x) sum(is.na(x)))
 print("Missing values per column:")
 print(missing_summary)
 
+# -----------------------------
 # b) Valeurs aberrantes
-# Exemple : Durées ou distances impossibles
-aberrant_distances <- df3 %>% filter(`distance parcourue` > 100)                          # distance > 100 km
+#    (distances trop grandes ou temps trop longs)
+# -----------------------------
 
-dfDuration <- df3 %>%
+library(dplyr)
+
+# Create a new data frame with activity duration (in minutes)
+df_aberrant <- df %>%
   mutate(
-    Duration_Op1 = as.numeric(`fin op1` - `début op1` , units = "mins"),
-    Duration_Op2 = as.numeric( `fin op2`  - `début op2`, units = "mins"),
-    Duration_Op3 = as.numeric(`fin op3`  - `début op3`, units = "mins"),
-    Duration_Op4 = as.numeric(`fin op4`  - `début op4`, units = "mins")
+    duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins"))
   )
 
-aberrant_durations <- dfDuration %>%
-  filter(Duration_Op1 > 480 | Duration_Op2 > 480 | Duration_Op3 > 480 | Duration_Op4 > 480)
+# Identify aberrant durations (negative or excessively long)
+df_aberrant_time <- df_aberrant %>%
+  filter(duration_min < 0 | duration_min > 480)
 
-print("Rows with aberrant durations:")
-print(aberrant_durations)
-print("Rows with aberrant distances:")
-print(aberrant_distances)
+# Identify aberrant distances (negative or too large)
+df_aberrant_distance <- df_aberrant %>%
+  filter(DISTANCE_PARCOURUE < 0 | DISTANCE_PARCOURUE > 1000)
 
-# c) Valeurs incohérentes : chevauchements ou fin avant début
-inconsistent_times <- df3 %>% filter(
-  `fin op1` < `début op1` |
-  `fin op2` < `début op2` |
-  `début op2` < `fin op1` |
-  `début op3` < `fin op2`
-)
+# -----------------------------
+# c) Valeurs incohérentes
+#    (chevauchements de dates ou enchaînements incohérents)
+# -----------------------------
 
-print("Rows with inconsistent dates/times:")
-print(inconsistent_times)
+# Incoherent dates: end before begin
+df_incoherent_dates <- df %>%
+  filter(DATETIME_END < DATETIME_BEGIN)
+
+# Overlapping activities for the same patient
+df_overlaps <- df %>%
+  arrange(ID, DATETIME_BEGIN) %>%
+  group_by(ID) %>%
+  mutate(previous_end = lag(DATETIME_END)) %>%
+  filter(DATETIME_BEGIN < previous_end) %>%
+  ungroup()
+
+nrow(df_aberrant_time)
+nrow(df_aberrant_distance)
+nrow(df_incoherent_dates)
+nrow(df_overlaps)
+
 ```
 
 ### Question 2) Dénombrements (/1)
@@ -292,6 +314,51 @@ N'hésitez pas à discuter brièvement de ces nombres notamment en les comparant
 
 ```{r answer 2}
 #_Entrez votre code R ici_
+library(dplyr)
+
+# a) Nombre de patients uniques
+df_patients <- df %>%
+  filter(TYPE == "PATIENT") %>%
+  distinct(ID)
+
+n_patients <- nrow(df_patients)
+
+# b) Nombre d'acteurs uniques
+df_actors <- df %>%
+  filter(TYPE == "ACTOR") %>%
+  distinct(ID)
+
+n_actors <- nrow(df_actors)
+
+
+# Nombre d'activités générales
+df_counts <- read_excel("Log_Patient_URO_12112015.xlsx")
+df_activities_general <- df_counts %>%
+  distinct(Activity_MACRO)
+n_activities_general <- nrow(df_activities_general)
+
+# Nombre d'activités détaillées
+df_activities_detailed <- df_counts %>%
+  distinct(Activity_DETAILS)
+n_activities_detailed <- nrow(df_activities_detailed)
+
+# Résumé
+summary_counts <- data.frame(
+  Indicator = c(
+    "Number of patients",
+    "Number of actors",
+    "Number of general activities",
+    "Number of detailed activities"
+  ),
+  Value = c(
+    n_patients,
+    n_actors,
+    n_activities_general,
+    n_activities_detailed
+  )
+)
+
+summary_counts
 ```
 
 ### Question 3) Analyse du patient le plus long (/1)
