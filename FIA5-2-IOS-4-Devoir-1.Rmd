@@ -443,6 +443,63 @@ N'hésitez pas à faire ressortir les faits les plus marquant et à discuter bri
 
 ```{r answer 4}
 #_Entrez votre code R ici_
+
+library(readxl)
+library(dplyr)
+library(ggplot2)
+
+# Charger les fichiers
+df_original <- read_csv2("local_data/trace_example_final.csv")  # contient type
+df_counts   <- read_excel("Log_Patient_URO_12112015.xlsx")  # contient les colonnes Activity_GENERAL/DETAILS
+
+# Faire un join pour combiner type et activités
+# Supposons que la colonne d'identifiant patient est "Patient_ID"
+df_counts$ID <- as.character(df_counts$ID)
+df_original$ID <- as.character(df_original$ID)
+
+df_combined <- df_counts %>%
+  left_join(df_original %>% select(ID, TYPE, DATETIME_BEGIN, DATETIME_END), by = "ID")
+
+df_combined
+
+# Filtrer uniquement les patients
+df_patients <- df_combined %>%
+  filter(TYPE == "PATIENT") %>%
+  mutate(duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins")))
+
+# Calculer temps total, temps d'attente et temps d'activité par patient
+df_time_summary <- df_patients %>%
+  group_by(ID) %>%
+  summarise(
+    total_time = sum(duration_min, na.rm = TRUE),
+    waiting_time = sum(duration_min[grepl("Attente", Activity_MACRO,  ignore.case = TRUE)], na.rm = TRUE),
+    activity_time = sum(duration_min[!grepl("Attente", Activity_MACRO, ignore.case = TRUE)], na.rm = TRUE),
+    waiting_ratio = waiting_time / total_time
+  ) %>%
+  ungroup()
+
+# Résumé des résultats
+summary(df_time_summary)
+
+# Visualisations
+ggplot(df_time_summary, aes(x = total_time)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "black") +
+  labs(title = "Distribution du temps total de séjour des patients", x = "Temps total (min)", y = "Nombre de patients")
+
+ggplot(df_time_summary, aes(x = waiting_time)) +
+  geom_histogram(bins = 30, fill = "orange", color = "black") +
+  labs(title = "Distribution du temps d'attente des patients", x = "Temps d'attente (min)", y = "Nombre de patients")
+
+ggplot(df_time_summary, aes(y = waiting_ratio)) +
+  geom_boxplot(fill = "purple", color = "black") +
+  labs(title = "Ratio temps d'attente / temps total par patient", y = "Ratio")
+
+ggplot(df_time_summary, aes(x = total_time, y = waiting_time)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(title = "Temps d'attente en fonction du temps total de séjour", x = "Temps total (min)", y = "Temps d'attente (min)")
+
+
 ```
 
 ### 5) Analyse du niveau d'occupation (/4)
