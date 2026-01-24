@@ -381,6 +381,47 @@ N'hésitez pas à discuter brièvement de son parcours.
 
 ```{r answer 3}
 #_Entrez votre code R ici_
+
+library(readr)
+library(dplyr)
+
+#  Charger le fichier original
+df_original <- read_csv2("local_data/trace_example_final.csv")
+
+df_patients <- df_original %>%
+  filter(TYPE == "PATIENT")
+
+#  Calculer la durée de chaque enregistrement (en minutes)
+df_patients <- df_patients %>%
+  mutate(duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins")))
+
+#  Calculer le temps total et la distance totale par patient
+df_patient_total <- df_patients %>%
+  group_by(ID) %>%
+  summarise(
+    total_duration_min = sum(duration_min, na.rm = TRUE),
+    total_distance = sum(DISTANCE_PARCOURUE, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+#  Identifier le patient avec le temps de séjour le plus long
+patient_longest <- df_patient_total %>%
+  filter(total_duration_min == max(total_duration_min))
+
+print("Patient with the longest stay:")
+print(patient_longest)
+
+# ⃣ Pour constater où se situe la cause (optionnel)
+# On peut afficher son parcours chronologique (toutes ses lignes)
+df_long_patient <- df_patients %>%
+  filter(ID == patient_longest$ID) %>%
+  arrange(DATETIME_BEGIN)
+
+df_long_patient %>% as.data.frame() 
+
+
+
+
 ```
 
 ### Question 4) Analyse des temps (/4)
