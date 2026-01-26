@@ -104,20 +104,24 @@ trace_example_1
 
 ```{r answer 1.a}
 
-# Set dataFrame with dataSet Log Patient URO
+library(dplyr)
+library(readxl)
+library(tidyverse)
+
+# Load the Excel dataset Patient URO
 df <- read_excel("Log_Patient_URO_12112015.xlsx")
 df
 
 # See dataFrame column names
 names(df)
 
-# Change columns names to be traited
+# Rename columns for easier handling
 df1 <- df %>%
    rename(Ress_Humaines = `Ress. Humaines`,
         Timestamp_start = `Timestamp start`,
         Timestamp_end   = `Timestamp end`)
 
-# Create column TYPE with PATIENT
+# Add a TYPE column with "PATIENT" for all rows
 df1 <- df1 %>%
   mutate(
     TYPE = "PATIENT"
@@ -125,9 +129,31 @@ df1 <- df1 %>%
 df1
 
 # Copy dataframe
-df2 <- copy(df1)
+df2 <- df1
 
-# Mapping old names with new names
+# Pivot the timestamp columns into a long format
+df3 <- df2 %>%
+  transmute(ID, TYPE, Activity_DETAILS,
+            t0 = Timestamp_start,
+            t1 = `début op1`,
+            t2 = `fin op1`,
+            t3 = `début op2`,
+            t4 = `fin op2`,
+            t5 = `début op3`,
+            t6 = `fin op3`,
+            t7 = `début op4`,
+            t8 = `fin op4`,
+            t9 = Timestamp_end, Ress_Humaines) %>%
+  filter(ID == 8) %>%
+  group_by(ID) %>%
+  gather(key = "type", value = "time", t0:t9) %>%
+  filter(time > as_datetime("2015-11-12 00:01:00")) %>%
+  arrange(ID, time) %>%
+  mutate(next_time = lead(time)) %>%
+  filter(!is.na(time))
+df3
+
+# Map old activity names to new ones
 ancien <- c(
   "Entrée des Consultations",
   "ACCUEIL.S_Attente_Accueil(1)",
@@ -165,60 +191,150 @@ nouveau <- c(
   "Uro_Examen_1","Uro_Examen_2","Uro_Examen_3","Uro_Attente_1"
 )
 
-# Substitution
-df2$Activity_DETAILS <- factor(
-  df2$Activity_DETAILS,
+# Replace old activity names with new names
+df3$Activity_DETAILS <- factor(
+  df3$Activity_DETAILS,
   levels = ancien,
   labels = nouveau
 )
-df2
-
-# Verify the result
-unique(df2$Activity_DETAILS)
-
-# ASC timestamp
-df3 <- df2 %>%
-  arrange(Timestamp_start)
 df3
 
+# Verify the result
+unique(df3$Activity_DETAILS)
+
+# Arrange timestamps ascending
+df4 <- df3 %>%
+  arrange(time)
+df4
+
 # Create column CURRENT_LOCATION
-df3 <- df3 %>%
+df4 <- df4 %>%
   mutate(
     CURRENT_LOCATION = Activity_DETAILS
   )
-df3
+df4
 
-# Create column NEXT_LOCATION
-df3 <- df3 %>% mutate(NEXT_LOCATION = lead(CURRENT_LOCATION))
-
-df3
-
-
-library(dplyr)
-
-# Create column that indicates the current step for each patient.
-df4 <- df3 %>%
-  mutate(
-    CURRENT_OPERATION_NUMBER = case_when(
-      format(`début op1`, "%H:%M:%S") != "00:00:00" & format(`début op2`, "%H:%M:%S") == "00:00:00" ~ 1,
-      format(`début op2`, "%H:%M:%S") != "00:00:00" & format(`début op3`, "%H:%M:%S") == "00:00:00" ~ 2,
-      format(`début op3`, "%H:%M:%S") != "00:00:00" & format(`début op4`, "%H:%M:%S") == "00:00:00" ~ 3,
-      format(`début op4`, "%H:%M:%S") != "00:00:00" ~ 4,
-      TRUE ~ NA_integer_
-    )
-  )
+# Add CURRENT_LOCATION column
+df4 <- df4 %>% mutate(NEXT_LOCATION = lead(CURRENT_LOCATION))
 
 df4
 
-# Create columns WITH_1 et WITH_2
+# Create column that indicates the current step for each patient.
 df5 <- df4 %>%
   mutate(
-    agents_split = str_split(Ress_Humaines, " - "),
-    WITH_1 = sapply(agents_split, function(x) if(length(x) >= 1) str_remove(x[1], "^Op\\d+ : ") %>% str_trim() else NA_character_),
-    WITH_2 = sapply(agents_split, function(x) if(length(x) >= 2) str_remove(x[2], "^Op\\d+ : ") %>% str_trim() else NA_character_)
-  ) %>%
-  select(-agents_split)
+    CURRENT_OPERATION_NUMBER = case_when(
+      str_detect(type, "t1|t2") ~ 1,  # début ou fin op1
+      str_detect(type, "t3|t4") ~ 2,  # début ou fin op2
+      str_detect(type, "t5|t6") ~ 3,  # début ou fin op3
+      str_detect(type, "t7|t8") ~ 4,  # début ou fin op4
+      TRUE ~ NA_integer_
+    )
+  )
 df5
+
+# Extract the relevant resources for each operation
+df6 <- df5 %>%
+  mutate(
+    RESSOURCE_OP = case_when(
+      # Cas simple : pas d'opération
+      !str_detect(Ress_Humaines, "Op\\d") & str_detect(type, "t1|t3|t5|t7|t9")  ~ Ress_Humaines,
+
+      # Op1
+      str_detect(type, "t1") ~ str_sub(
+        str_extract(Ress_Humaines, "Op1\\s*:\\s*([^-])*\\s*-"),
+        7L, -3L
+      ),
+
+      # Op2
+      str_detect(type, "t3") ~ str_sub(
+        str_extract(Ress_Humaines, "Op2\\s*:\\s*([^-])*\\s*-"),
+        7L, -3L
+      ),
+
+      # Op3
+      str_detect(type, "t5") ~ str_sub(
+        str_extract(Ress_Humaines, "Op3\\s*:\\s*([^-])*\\s*-"),
+        7L, -3L
+      ),
+
+      # Op4
+      str_detect(type, "t7") ~ str_sub(
+        str_extract(Ress_Humaines, "Op4\\s*:\\s*([^-])*\\s*-"),
+        7L, -3L
+      ),
+      
+       # Op5
+      str_detect(type, "t9") ~ str_sub(
+        str_extract(Ress_Humaines, "Op5\\s*:\\s*([^-])*\\s*-"),
+        7L, -3L
+      ),
+
+      TRUE ~ NA_character_
+    )
+  )
+df6
+
+# Split resources into WITH_1 and WITH_2 if " et " present
+df7 <- df6 %>%
+  mutate(
+    WITH_1 = sapply(str_split(RESSOURCE_OP, " et "), `[`, 1),
+    WITH_2 = sapply(str_split(RESSOURCE_OP, " et "), `[`, 2)
+  ) %>%
+  select(-RESSOURCE_OP)
+df7
+
+# Build final dataframe for patients
+final_df <- df7 %>%
+  transmute(
+    ID,
+    TYPE,
+    CURRENT_LOCATION = as.character(CURRENT_LOCATION),
+    NEXT_LOCATION    = as.character(NEXT_LOCATION),
+    CURRENT_OPERATION_NUMBER,
+    WITH_1,
+    WITH_2,
+    DATETIME_BEGIN = time,        
+    DATETIME_END   = next_time  
+  )
+
+final_df
+
+# Ensure character type for ID and WITH columns
+final_df <- final_df %>%
+  mutate(ID = as.character(ID),
+         WITH_1 = as.character(WITH_1),
+         WITH_2 = as.character(WITH_2))
+
+# Create trace_full including ACTORS derived from WITH_1 and WITH_2
+trace_full <- final_df %>%
+  filter(!is.na(WITH_1)) %>%
+  mutate(
+    WITH_2 = NA,               
+    ACTOR_ID = ID,             
+    ID = WITH_1,               
+    WITH_1 = ACTOR_ID          
+  ) %>%
+  select(ID, TYPE, CURRENT_LOCATION, NEXT_LOCATION, CURRENT_OPERATION_NUMBER, WITH_1, WITH_2, DATETIME_BEGIN, DATETIME_END) %>%
+  mutate(TYPE = "ACTOR") %>%
+  bind_rows(
+    final_df %>%
+      filter(!is.na(WITH_2)) %>%
+      mutate(
+        WITH_1 = NA,
+        ACTOR_ID = ID,
+        ID = WITH_2,
+        WITH_1 = ACTOR_ID
+      ) %>%
+      select(ID, TYPE, CURRENT_LOCATION, NEXT_LOCATION, CURRENT_OPERATION_NUMBER, WITH_1, WITH_2, DATETIME_BEGIN, DATETIME_END) %>%
+      mutate(TYPE = "ACTOR")
+  ) %>%
+  bind_rows(final_df) %>%   
+  arrange(ID, DATETIME_BEGIN)
+trace_full
+
+# Inspect only the non-patient rows
+# trace_full %>%
+#   filter(TYPE != "PATIENT")
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
@@ -230,10 +346,6 @@ De plus, il vous est demandé d'identifier toutes les erreurs de données potent
 -   les valeurs incohérentes comme des chevauchements de dates ou des enchaînements incohérent d'activités
 
 #### Réponse :
-
-```         
-Entrez votre texte ici
-```
 
 ```{r answer 1.b}
 #_Entrez votre code R ici_
