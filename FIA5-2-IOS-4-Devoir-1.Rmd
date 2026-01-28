@@ -473,6 +473,14 @@ summary_counts <- data.frame(
 summary_counts
 ```
 
+#### Analyse
+
+Le jeu de données comprend 68 patients pour 18 acteurs, soit environ 4 patients par acteur, ce qui est cohérent avec le fonctionnement d’un service ambulatoire où chaque acteur intervient auprès de plusieurs patients au cours de la journée.
+
+On recense 14 activités générales et 24 activités détaillées, ce qui traduit une modélisation relativement fine du parcours patient.
+Les activités générales décrivent les grandes étapes du processus, tandis que les activités détaillées permettent de distinguer les différentes zones et modalités opérationnelles.
+Cette granularité est pertinente pour analyser les flux et les temps d’attente, mais elle implique une complexité accrue et nécessite de rester prudent lors de l’analyse d’activités peu représentées.
+
 ### Question 3) Analyse du patient le plus long (/1)
 
 Il est souvent utile d'identifier les cas les plus extrêmes dans une population.
@@ -530,8 +538,6 @@ df_long_patient <- df_patients %>%
   arrange(DATETIME_BEGIN)
 
 df_long_patient %>% as.data.frame() 
-
-
 
 
 ```
@@ -633,8 +639,173 @@ Il vous est demandé de faire les mêmes analyses sur le nombre d'arrivées et d
 *Entrez votre texte ici*
 
 ```{r answer 5}
-#_Entrez votre code R ici_
+
+library(readr)
+library(dplyr)
+library(lubridate)
+library(tidyr)
+library(zoo)
+library(ggplot2)
+
+## Niveau d'occupation à chaque instant et lissé.
+
+# 1) Lecture des données
+df <- read_csv2("local_data/trace_example_final.csv")
+
+# 2) Conversion des dates + fuseau horaire
+df <- df %>%
+  mutate(
+    DATETIME_BEGIN = with_tz(ymd_hms(DATETIME_BEGIN, tz = "UTC"), "Europe/Paris"),
+    DATETIME_END   = with_tz(ymd_hms(DATETIME_END,   tz = "UTC"), "Europe/Paris")
+  )
+
+# 3) Construction des séjours par patient
+sejours_service <- df %>%
+  filter(TYPE == "PATIENT") %>%
+  group_by(ID) %>%
+  summarise(
+    entree = min(DATETIME_BEGIN, na.rm = TRUE),
+    sortie = max(DATETIME_END,   na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# 4) Transformation en événements
+arrivals <- sejours_service %>%
+  transmute(datetime = entree, event =  1)
+
+departures <- sejours_service %>%
+  transmute(datetime = sortie, event = -1)
+
+df_events <- bind_rows(arrivals, departures) %>%
+  arrange(datetime)
+
+# 5) Occupation instantanée
+df_occupation <- df_events %>%
+  mutate(occupation = cumsum(event))
+
+# 6) Mise sur grille temporelle
+df_occupation_grid <- time_grid %>%
+  mutate(
+    occupation = df_occupation$occupation[
+      findInterval(datetime, df_occupation$datetime)
+    ]
+  ) %>%
+  mutate(
+    occupation = ifelse(is.na(occupation), 0, occupation)
+  )
+
+# 7) Lissage sur 2 heures 
+df_occupation_grid <- df_occupation_grid %>%
+  mutate(
+    occupation_2h = rollmean(
+      occupation,
+      k = 24,
+      align = "center",
+      fill = NA
+    )
+  )
+
+# 8) Visualisation
+ggplot(df_occupation_grid, aes(x = datetime)) +
+  geom_line(aes(y = occupation), 
+            color = "grey70", 
+            linewidth = 0.6) +
+  geom_line(aes(y = occupation_2h), 
+            color = "steelblue", 
+            linewidth = 1) +
+  labs(
+    title = "Niveau d’occupation du service",
+    subtitle = "Occupation instantanée (gris) et lissée sur 2h (bleu)",
+    x = "Temps",
+    y = "Nombre de patients présents"
+  )
+
+## Niveau d'occupation par bloc de 2h
+
+# Mise sur grille par bloc de 2h
+
+occupation_2h_blocs <- df_occupation_grid %>%
+  mutate(
+    bloc_2h = floor_date(datetime, unit = "2 hours")
+  ) %>%
+  group_by(bloc_2h) %>%
+  summarise(
+    nb_patients_moyen = mean(occupation),
+    .groups = "drop"
+  )
+
+# Visualisation
+
+ggplot(occupation_2h_blocs, aes(x = bloc_2h, y = nb_patients_moyen)) +
+  geom_col(fill = "steelblue") +
+  labs(
+    title = "Nombre moyen de patients présents par blocs de 2h",
+    x = "Créneau horaire",
+    y = "Patients (moyenne sur 2h)"
+  )
+
+## Niveau d'occupation moyen sur la journée
+
+occupation_journee <- df_occupation_grid %>%
+  summarise(
+    nb_patients_moyen_jour = mean(occupation)
+  )
+
+tableau_occupation_jour <- df_occupation_grid %>%
+  summarise(
+    `Occupation moyenne journalière` = round(mean(occupation), 2)
+  )
+
+tableau_occupation_jour
+
+## Analyse départs et arrivées
+
+arrivees_2h <- arrivals %>%
+  mutate(bloc_2h = floor_date(datetime, "2 hours")) %>%
+  count(bloc_2h, name = "nb_arrivees")
+
+departs_2h <- departures %>%
+  mutate(bloc_2h = floor_date(datetime, "2 hours")) %>%
+  count(bloc_2h, name = "nb_departs")
+
+flux_2h <- full_join(arrivees_2h, departs_2h, by = "bloc_2h") %>%
+  replace_na(list(nb_arrivees = 0, nb_departs = 0))%>%
+  mutate(flux_net = nb_arrivees - nb_departs)
+
+ggplot(flux_2h, aes(x = bloc_2h)) +
+  geom_col(aes(y = nb_arrivees), fill = "darkgreen") +
+  geom_col(aes(y = -nb_departs), fill = "firebrick") +
+  labs(
+    title = "Arrivées et départs par blocs de 2 heures",
+    x = "Créneau horaire",
+    y = "Flux de patients (+ arrivées / − départs)"
+  )
+
+
+
 ```
+
+#### Analyse des résultats
+
+L’analyse du niveau d’occupation du service met en évidence une dynamique journalière marquée liée aux flux d’arrivées et de départs des patients.
+
+Le niveau d’occupation instantané montre une montée progressive en début de matinée, suivie de deux phases de congestion distinctes.
+La première apparaît en fin de matinée, tandis que la seconde, plus prononcée, se situe en milieu d’après-midi.
+Le lissage sur une fenêtre de 2 heures permet de faire ressortir clairement ces tendances en atténuant les fluctuations de court terme.
+Le nombre maximal de patients présents simultanément atteint environ 14 à 15 patients.
+
+L’occupation moyenne sur l’ensemble de la journée est de 9,07 patients.
+Cette valeur,inférieure aux niveaux observés lors des pics, souligne une forte variabilité temporelle de la charge du système.
+Le service fonctionne donc une part significative du temps au-dessus de sa charge moyenne, ce qui peut constituer un facteur de tension opérationnelle lors des périodes de pointe.
+
+L’analyse des arrivées et des départs par blocs de 2 heures permet d’expliquer ces variations.
+En début de journée, le nombre d’arrivées est supérieur au nombre de départs, entraînant une accumulation progressive de patients et une augmentation du niveau d’occupation.
+En fin de matinée et en début d’après-midi, les départs augmentent mais ne compensent pas totalement les arrivées, ce qui conduit à un maintien de l’occupation à un niveau élevé.
+En revanche, en fin d’après-midi et en soirée, les départs deviennent majoritaires tandis que les arrivées diminuent fortement, ce qui provoque une décroissance rapide de l’occupation jusqu’à la fermeture progressive du service.
+
+Ainsi, l’évolution du niveau d’occupation apparaît comme la conséquence directe du déséquilibre temporaire entre arrivées et départs.
+Les périodes de congestion identifiées correspondent à des phases de flux net entrant positif, tandis que la décrue observée en fin de journée est associée à un flux net sortant.
+Cette cohérence entre flux et occupation valide la pertinence des indicateurs utilisés et met en évidence des créneaux horaires critiques sur lesquels une optimisation organisationnelle pourrait être envisagée.
 
 ### 6) Analyse de l'activité des acteurs (/4)
 
@@ -647,4 +818,72 @@ On considéra que les acteurs arrivent dans le service 5 min avant leur premièr
 
 ```{r answer 6}
 #_Entrez votre code R ici_
+df_original <- read_csv2("local_data/trace_example_final.csv") 
+df_actors_loc <- df_original %>%
+  filter(TYPE == "ACTOR") %>%
+  mutate(
+    ACTOR_TYPE_INFERRED = case_when(
+      grepl("^Accueil", CURRENT_LOCATION, ignore.case = TRUE) ~ "Accueil",
+      grepl("Uro_Box", CURRENT_LOCATION, ignore.case = TRUE) ~ "Medecin",
+      grepl("Uro_Examen", CURRENT_LOCATION, ignore.case = TRUE) ~ "Medecin",
+      grepl("Uro_Bureau_IDE", CURRENT_LOCATION, ignore.case = TRUE) ~ "IDE",
+      grepl("Uro_Debimetrie", CURRENT_LOCATION, ignore.case = TRUE) ~ "IDE_Technique",
+      grepl("Uro_Bureau_Annonce", CURRENT_LOCATION, ignore.case = TRUE) ~ "Medecin",
+      TRUE ~ "Autre"
+    )
+  )
+
+df_actors_loc
+
+# Vérification
+table(df_actors_loc$ACTOR_TYPE_INFERRED)
+
+library(lubridate)
+
+df_actor_presence <- df_actors_loc %>%
+  group_by(ID, ACTOR_TYPE_INFERRED) %>%
+  summarise(
+    first_activity = min(DATETIME_BEGIN, na.rm = TRUE),
+    last_activity  = max(DATETIME_END, na.rm = TRUE),
+    total_presence_min = as.numeric(
+      difftime(last_activity + minutes(5),
+               first_activity - minutes(5),
+               units = "mins")
+    ),
+    .groups = "drop"
+  )
+
+df_actor_summary <- df_actor_presence %>%
+  group_by(ACTOR_TYPE_INFERRED) %>%
+  summarise(
+    nb_actors = n(),
+    mean_presence = mean(total_presence_min, na.rm = TRUE),
+    median_presence = median(total_presence_min, na.rm = TRUE),
+    max_presence = max(total_presence_min, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+df_actor_summary
+
+library(ggplot2)
+
+ggplot(df_actor_presence,
+       aes(x = ACTOR_TYPE_INFERRED, y = total_presence_min)) +
+  geom_boxplot() +
+  labs(
+    title = "Actors' presence time by inferred actor type",
+    x = "Inferred actor type",
+    y = "Total presence time (minutes)"
+  ) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
+#### Analyse du diagramme
+
+L’analyse des temps de présence des acteurs par type met en évidence une forte hétérogénéité organisationnelle au sein du service.
+Les acteurs de l’accueil présentent des temps de présence élevés et relativement homogènes, traduisant un rôle continu et structurant, nécessaire sur l’ensemble de la plage d’ouverture du service.
+À l’inverse, les infirmiers (IDE) affichent des durées de présence plus courtes et plus dispersées, ce qui suggère des interventions ponctuelles ou spécialisées, possiblement liées à des actes techniques ou à des rotations d’équipe.
+Les médecins se distinguent par une très forte variabilité de leurs temps de présence, certains n’intervenant que sur des créneaux limités tandis que d’autres restent présents sur une grande partie de la journée.
+Cette dispersion indique des pratiques professionnelles hétérogènes et fait des médecins un facteur majeur de variabilité dans l’organisation du service.
+Enfin, la catégorie « Autre », bien que moins précisément caractérisée, présente des temps de présence élevés, suggérant des fonctions de coordination ou de support transversal.
+Dans l’ensemble, ces résultats soulignent une organisation différenciée des rôles, où certains acteurs assurent une continuité opérationnelle tandis que d’autres interviennent de manière plus flexible, contribuant à la dynamique globale du système.
