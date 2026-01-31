@@ -110,7 +110,7 @@ library(tidyverse)
 
 # Load the Excel dataset Patient URO
 df <- read_excel("Log_Patient_URO_12112015.xlsx")
-df
+# df
 
 # See dataFrame column names
 names(df)
@@ -119,21 +119,22 @@ names(df)
 df1 <- df %>%
    rename(Ress_Humaines = `Ress. Humaines`,
         Timestamp_start = `Timestamp start`,
-        Timestamp_end   = `Timestamp end`)
+        Timestamp_end   = `Timestamp end`,
+        DISTANCE_PARCOURUE = `distance parcourue`)
 
 # Add a TYPE column with "PATIENT" for all rows
 df1 <- df1 %>%
   mutate(
     TYPE = "PATIENT"
     )
-df1
+# df1
 
 # Copy dataframe
 df2 <- df1
 
 # Pivot the timestamp columns into a long format
 df3 <- df2 %>%
-  transmute(ID, TYPE, Activity_DETAILS,
+  transmute(ID, TYPE, Activity_DETAILS, DISTANCE_PARCOURUE,
             t0 = Timestamp_start,
             t1 = `début op1`,
             t2 = `fin op1`,
@@ -144,93 +145,71 @@ df3 <- df2 %>%
             t7 = `début op4`,
             t8 = `fin op4`,
             t9 = Timestamp_end, Ress_Humaines) %>%
-  filter(ID == 8) %>%
+#  filter(ID == 8) %>%
   group_by(ID) %>%
   gather(key = "type", value = "time", t0:t9) %>%
   filter(time > as_datetime("2015-11-12 00:01:00")) %>%
   arrange(ID, time) %>%
   mutate(next_time = lead(time)) %>%
   filter(!is.na(time))
-df3
+# df3
 
 # Map old activity names to new ones
-ancien <- c(
-  "Entrée des Consultations",
-  "ACCUEIL.S_Attente_Accueil(1)",
-  "ACCUEIL.Bureau_Accueil(3)",
-  "URO.S_Attente_5(1)",
-  "ACCUEIL.Bureau_Accueil(2)",
-  "ACCUEIL.Bureau_Accueil(1)",
-  "URO.Box_Consult(1)",
-  "SORTIE_URO.File_Attente(1)",
-  "ACCUEIL.Bureau_AccueilPRIO(1)",
-  "SORTIE_URO.Bureau_Sortie(2)",
-  "URO.Box_Consult(2)",
-  "URO.Box_Consult(3)",
-  "Sortie des Consultations",
-  "URO.Box_Consult(4)",
-  "URO.Salle_Débitmétrie(1)",
-  "URO.Box_Consult(5)",
-  "URO.Box_Consult(6)",
-  "URO.Box_Consult(7)",
-  "URO.Bureau_Annonce(1)",
-  "URO.Salle_Examen(1)",
-  "SORTIE_URO.Bureau_Sortie(1)",
-  "URO.Bureau_IDE(1)",
-  "URO.Salle_Examen(2)",
-  "URO.Salle_Examen(3)"
-)
+place_table <- tibble(
+  Activity_DETAILS = c("Entrée des Consultations",
+    "ACCUEIL.Bureau_AccueilPRIO(1)","ACCUEIL.Bureau_Accueil(1)",
+    "ACCUEIL.Bureau_Accueil(2)","ACCUEIL.Bureau_Accueil(3)",
+    "ACCUEIL.S_Attente_Accueil(1)",
+    "SORTIE_URO.File_Attente(1)","SORTIE_URO_Bureau_Sortie(1)",
+    "SORTIE_URO.Bureau_Sortie(2)","Sortie des Consultations",
+    "URO.Box_Consult(1)","URO.Box_Consult(2)","URO.Box_Consult(3)",
+    "URO.Box_Consult(4)","URO.Box_Consult(5)","URO.Box_Consult(6)",
+    "URO.Box_Consult(7)","URO.Bureau_Annonce(1)","URO.Bureau_IDE(1)",
+    "URO.Salle_Débitmétrie(1)","URO.Salle_Examen(1)",
+    "URO.Salle_Examen(2)","URO.Salle_Examen(3)","URO.S_Attente_5(1)"),
+  place = c("Entree_Generale","Accueil_Prio_1","Accueil_General_1",
+            "Accueil_General_2","Accueil_General_3","Accueil_Attente",
+            "Sortie_Attente","Sortie_Bureau_1","Sortie_Bureau_2",
+            "Sortie_Generale","Uro_Box_1","Uro_Box_2","Uro_Box_3",
+            "Uro_Box_4","Uro_Box_5","Uro_Box_6","Uro_Box_7",
+            "Uro_Bureau_Annonce_1","Uro_Bureau_IDE_1","Uro_Debimetrie_1",
+            "Uro_Examen_1","Uro_Examen_2","Uro_Examen_3","Uro_Attente_1"))
 
-nouveau <- c(
-  "Entree_Generale","Accueil_Prio_1","Accueil_General_1", 
-  "Accueil_General_2","Accueil_General_3","Accueil_Attente", 
-  "Sortie_Attente","Sortie_Bureau_1","Sortie_Bureau_2", 
-  "Sortie_Generale","Uro_Box_1","Uro_Box_2","Uro_Box_3", 
-  "Uro_Box_4","Uro_Box_5","Uro_Box_6","Uro_Box_7", 
-  "Uro_Bureau_Annonce_1","Uro_Bureau_IDE_1","Uro_Debimetrie_1", 
-  "Uro_Examen_1","Uro_Examen_2","Uro_Examen_3","Uro_Attente_1"
-)
+# Map old activity names to new ones using place_table
+df3 <- df3 %>%
+  left_join(place_table, by = "Activity_DETAILS") %>%
+  rename(CURRENT_LOCATION = place)
 
-# Replace old activity names with new names
-df3$Activity_DETAILS <- factor(
-  df3$Activity_DETAILS,
-  levels = ancien,
-  labels = nouveau
-)
-df3
+# Check mapping
+unique(df3$CURRENT_LOCATION)
 
-# Verify the result
-unique(df3$Activity_DETAILS)
-
-# Arrange timestamps ascending
+# Arrange by time and create NEXT_LOCATION
 df4 <- df3 %>%
-  arrange(time)
-df4
-
-# Create column CURRENT_LOCATION
-df4 <- df4 %>%
+  arrange(time) %>%
   mutate(
-    CURRENT_LOCATION = Activity_DETAILS
+    NEXT_LOCATION = lead(CURRENT_LOCATION)
   )
-df4
+
+# df4
+
 
 # Add CURRENT_LOCATION column
 df4 <- df4 %>% mutate(NEXT_LOCATION = lead(CURRENT_LOCATION))
 
-df4
+# df4
 
 # Create column that indicates the current step for each patient.
 df5 <- df4 %>%
   mutate(
     CURRENT_OPERATION_NUMBER = case_when(
-      str_detect(type, "t1|t2") ~ 1,  # début ou fin op1
-      str_detect(type, "t3|t4") ~ 2,  # début ou fin op2
-      str_detect(type, "t5|t6") ~ 3,  # début ou fin op3
-      str_detect(type, "t7|t8") ~ 4,  # début ou fin op4
+      str_detect(type, "t1") ~ 1,  # début ou fin op1
+      str_detect(type, "t3") ~ 2,  # début ou fin op2
+      str_detect(type, "t5") ~ 3,  # début ou fin op3
+      str_detect(type, "t7") ~ 4,  # début ou fin op4
       TRUE ~ NA_integer_
     )
   )
-df5
+# df5
 
 # Extract the relevant resources for each operation
 df6 <- df5 %>%
@@ -272,7 +251,7 @@ df6 <- df5 %>%
       TRUE ~ NA_character_
     )
   )
-df6
+# df6
 
 # Split resources into WITH_1 and WITH_2 if " et " present
 df7 <- df6 %>%
@@ -281,7 +260,7 @@ df7 <- df6 %>%
     WITH_2 = sapply(str_split(RESSOURCE_OP, " et "), `[`, 2)
   ) %>%
   select(-RESSOURCE_OP)
-df7
+# df7
 
 # Build final dataframe for patients
 final_df <- df7 %>%
@@ -294,47 +273,138 @@ final_df <- df7 %>%
     WITH_1,
     WITH_2,
     DATETIME_BEGIN = time,        
-    DATETIME_END   = next_time  
+    DATETIME_END   = next_time,
+    DISTANCE_PARCOURUE
   )
 
-final_df
+# final_df
 
-# Ensure character type for ID and WITH columns
 final_df <- final_df %>%
-  mutate(ID = as.character(ID),
-         WITH_1 = as.character(WITH_1),
-         WITH_2 = as.character(WITH_2))
+  mutate(
+    ID = as.character(ID),
+    WITH_1 = as.character(WITH_1),
+    WITH_2 = as.character(WITH_2)
+  )
 
-# Create trace_full including ACTORS derived from WITH_1 and WITH_2
-trace_full <- final_df %>%
+# Create ACTOR entities based on patient interactions
+actors <- final_df %>%
+  filter(TYPE == "PATIENT") %>%
   filter(!is.na(WITH_1)) %>%
   mutate(
-    WITH_2 = NA,               
-    ACTOR_ID = ID,             
-    ID = WITH_1,               
-    WITH_1 = ACTOR_ID          
+    WITH_2 = NA,
+    WITH_3 = ID,
+    ID = WITH_1,
+    WITH_1 = WITH_3,
+    TYPE = "ACTOR",
+    DISTANCE_PARCOURUE = NA
   ) %>%
-  select(ID, TYPE, CURRENT_LOCATION, NEXT_LOCATION, CURRENT_OPERATION_NUMBER, WITH_1, WITH_2, DATETIME_BEGIN, DATETIME_END) %>%
-  mutate(TYPE = "ACTOR") %>%
-  bind_rows(
+  select(-WITH_3) %>%
+  rbind(
     final_df %>%
+      filter(TYPE == "PATIENT") %>%
       filter(!is.na(WITH_2)) %>%
       mutate(
         WITH_1 = NA,
-        ACTOR_ID = ID,
+        WITH_3 = ID,
         ID = WITH_2,
-        WITH_1 = ACTOR_ID
+        WITH_1 = WITH_3,
+        TYPE = "ACTOR",
+        DISTANCE_PARCOURUE = NA
       ) %>%
-      select(ID, TYPE, CURRENT_LOCATION, NEXT_LOCATION, CURRENT_OPERATION_NUMBER, WITH_1, WITH_2, DATETIME_BEGIN, DATETIME_END) %>%
-      mutate(TYPE = "ACTOR")
+      select(-WITH_3)
   ) %>%
-  bind_rows(final_df) %>%   
   arrange(ID, DATETIME_BEGIN)
-trace_full
 
-# Inspect only the non-patient rows
-# trace_full %>%
-#   filter(TYPE != "PATIENT")
+# Combine patient and actor traces into a full event log
+trace_full <- bind_rows(final_df, actors) %>%
+  arrange(ID, DATETIME_BEGIN)
+
+final_df <- final_df %>%
+  mutate(
+    ID     = as.character(ID),
+    WITH_1 = as.character(WITH_1),
+    WITH_2 = as.character(WITH_2)
+  )
+
+# Build actor activity, idle, and mirror traces
+actors_base <- final_df %>%
+  filter(TYPE == "PATIENT") %>%
+  mutate(PATIENT_ID = ID) %>%                
+  pivot_longer(
+    cols = c(WITH_1, WITH_2),
+    values_to = "ACTOR_ID",
+    names_to = "src"
+  ) %>%
+  filter(!is.na(ACTOR_ID)) %>%
+  transmute(
+    ID = ACTOR_ID,
+    TYPE = "ACTOR",
+    CURRENT_LOCATION,
+    NEXT_LOCATION,
+    CURRENT_OPERATION_NUMBER,
+    WITH_1 = PATIENT_ID,                      
+    WITH_2 = NA_character_,
+    DATETIME_BEGIN,
+    DATETIME_END,
+    DISTANCE_PARCOURUE = NA_real_
+  ) %>%
+  distinct(ID, CURRENT_OPERATION_NUMBER, DATETIME_BEGIN, .keep_all = TRUE) %>%
+  arrange(ID, DATETIME_BEGIN)
+
+actor_idle <- actors_base %>%
+  group_by(ID) %>%
+  arrange(CURRENT_OPERATION_NUMBER) %>%
+  mutate(
+    idle_begin = lag(DATETIME_END),
+    idle_end   = DATETIME_BEGIN,
+    idle_op    = lag(CURRENT_OPERATION_NUMBER),
+    idle_loc   = lag(CURRENT_LOCATION)
+  ) %>%
+  filter(!is.na(idle_begin) & idle_begin < idle_end) %>%
+  transmute(
+    ID,
+    TYPE = "ACTOR",
+    CURRENT_LOCATION = idle_loc,
+    NEXT_LOCATION    = idle_loc,
+    CURRENT_OPERATION_NUMBER = idle_op,
+    WITH_1 = NA_character_,
+    WITH_2 = NA_character_,
+    DATETIME_BEGIN = idle_begin,
+    DATETIME_END   = idle_end,
+    DISTANCE_PARCOURUE = NA_real_
+  ) %>%
+  ungroup()
+
+actor_mirror <- final_df %>%
+  filter(
+    TYPE == "PATIENT",
+    !is.na(WITH_2)
+  ) %>%
+  transmute(
+    ID = WITH_2,              
+    TYPE = "ACTOR",
+    CURRENT_LOCATION,
+    NEXT_LOCATION,
+    CURRENT_OPERATION_NUMBER,
+    WITH_1 = NA_character_,
+    WITH_2 = ID,                
+    DATETIME_BEGIN,
+    DATETIME_END = DATETIME_BEGIN,
+    DISTANCE_PARCOURUE = NA_real_
+  )
+
+# Final complete trace
+trace_full_complete <- bind_rows(
+  final_df,
+  actors_base,
+  actor_idle,
+  actor_mirror
+) %>%
+  arrange(ID, DATETIME_BEGIN)
+
+trace_full_complete
+
+# trace_full %>% filter(TYPE != "PATIENT")
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
@@ -619,16 +689,24 @@ ggplot(df_time_summary, aes(x = total_time, y = waiting_time)) +
 
 
 ```
+
 #### Analyse
 
-L’analyse de la distribution du temps total de séjour des patients met en évidence une forte asymétrie. La majorité des patients présente un temps de séjour inférieur à 2000 minutes, avec un pic marqué autour de 500 minutes, correspondant au fonctionnement nominal du service pour la plupart des parcours. Toutefois, la présence de quelques cas extrêmes, avec des durées de séjour atteignant près de 5000 et plus de 6000 minutes, révèle des situations atypiques susceptibles d’indiquer des phénomènes de congestion ou des dysfonctionnements ponctuels du processus. Ces cas extrêmes contribuent significativement à l’augmentation de la moyenne globale.
+L’analyse de la distribution du temps total de séjour des patients met en évidence une forte asymétrie.
+La majorité des patients présente un temps de séjour inférieur à 2000 minutes, avec un pic marqué autour de 500 minutes, correspondant au fonctionnement nominal du service pour la plupart des parcours.
+Toutefois, la présence de quelques cas extrêmes, avec des durées de séjour atteignant près de 5000 et plus de 6000 minutes, révèle des situations atypiques susceptibles d’indiquer des phénomènes de congestion ou des dysfonctionnements ponctuels du processus.
+Ces cas extrêmes contribuent significativement à l’augmentation de la moyenne globale.
 
-La distribution du temps d’attente des patients présente une forme similaire, fortement asymétrique, avec une majorité de patients subissant des temps d’attente modérés, mais une minorité exposée à des attentes très élevées. Cette dispersion importante traduit une variabilité marquée des parcours et met en évidence que, si le service fonctionne de manière acceptable pour la plupart des patients, certains parcours sont fortement pénalisés par des périodes d’attente prolongées.
+La distribution du temps d’attente des patients présente une forme similaire, fortement asymétrique, avec une majorité de patients subissant des temps d’attente modérés, mais une minorité exposée à des attentes très élevées.
+Cette dispersion importante traduit une variabilité marquée des parcours et met en évidence que, si le service fonctionne de manière acceptable pour la plupart des patients, certains parcours sont fortement pénalisés par des périodes d’attente prolongées.
 
-L’analyse du ratio entre le temps d’attente et le temps total de séjour montre que l’attente représente une part significative du parcours patient. La médiane de ce ratio se situe autour de 40 %, avec une dispersion relativement limitée entre les patients. Ce résultat suggère que l’attente constitue une composante structurelle du fonctionnement du service, affectant de manière relativement homogène l’ensemble des patients, plutôt qu’un phénomène marginal limité à quelques cas isolés.
+L’analyse du ratio entre le temps d’attente et le temps total de séjour montre que l’attente représente une part significative du parcours patient.
+La médiane de ce ratio se situe autour de 40 %, avec une dispersion relativement limitée entre les patients.
+Ce résultat suggère que l’attente constitue une composante structurelle du fonctionnement du service, affectant de manière relativement homogène l’ensemble des patients, plutôt qu’un phénomène marginal limité à quelques cas isolés.
 
-Enfin, l’étude de la relation entre le temps d’attente et le temps total de séjour met en évidence une corrélation quasi linéaire très forte. Cette relation indique que l’allongement des temps de séjour est principalement dû à l’augmentation des temps d’attente, et non à une augmentation du temps d’activité. Ainsi, les patients ayant les séjours les plus longs sont avant tout ceux qui subissent les attentes les plus importantes, ce qui confirme le rôle central de l’attente dans la dégradation de la performance globale du service.
-
+Enfin, l’étude de la relation entre le temps d’attente et le temps total de séjour met en évidence une corrélation quasi linéaire très forte.
+Cette relation indique que l’allongement des temps de séjour est principalement dû à l’augmentation des temps d’attente, et non à une augmentation du temps d’activité.
+Ainsi, les patients ayant les séjours les plus longs sont avant tout ceux qui subissent les attentes les plus importantes, ce qui confirme le rôle central de l’attente dans la dégradation de la performance globale du service.
 
 ### 5) Analyse du niveau d'occupation (/4)
 
