@@ -619,6 +619,16 @@ ggplot(df_time_summary, aes(x = total_time, y = waiting_time)) +
 
 
 ```
+#### Analyse
+
+L’analyse de la distribution du temps total de séjour des patients met en évidence une forte asymétrie. La majorité des patients présente un temps de séjour inférieur à 2000 minutes, avec un pic marqué autour de 500 minutes, correspondant au fonctionnement nominal du service pour la plupart des parcours. Toutefois, la présence de quelques cas extrêmes, avec des durées de séjour atteignant près de 5000 et plus de 6000 minutes, révèle des situations atypiques susceptibles d’indiquer des phénomènes de congestion ou des dysfonctionnements ponctuels du processus. Ces cas extrêmes contribuent significativement à l’augmentation de la moyenne globale.
+
+La distribution du temps d’attente des patients présente une forme similaire, fortement asymétrique, avec une majorité de patients subissant des temps d’attente modérés, mais une minorité exposée à des attentes très élevées. Cette dispersion importante traduit une variabilité marquée des parcours et met en évidence que, si le service fonctionne de manière acceptable pour la plupart des patients, certains parcours sont fortement pénalisés par des périodes d’attente prolongées.
+
+L’analyse du ratio entre le temps d’attente et le temps total de séjour montre que l’attente représente une part significative du parcours patient. La médiane de ce ratio se situe autour de 40 %, avec une dispersion relativement limitée entre les patients. Ce résultat suggère que l’attente constitue une composante structurelle du fonctionnement du service, affectant de manière relativement homogène l’ensemble des patients, plutôt qu’un phénomène marginal limité à quelques cas isolés.
+
+Enfin, l’étude de la relation entre le temps d’attente et le temps total de séjour met en évidence une corrélation quasi linéaire très forte. Cette relation indique que l’allongement des temps de séjour est principalement dû à l’augmentation des temps d’attente, et non à une augmentation du temps d’activité. Ainsi, les patients ayant les séjours les plus longs sont avant tout ceux qui subissent les attentes les plus importantes, ce qui confirme le rôle central de l’attente dans la dégradation de la performance globale du service.
+
 
 ### 5) Analyse du niveau d'occupation (/4)
 
