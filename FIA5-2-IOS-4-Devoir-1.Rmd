@@ -767,10 +767,10 @@ La distribution du temps d’attente des patients présente une forme similaire,
 Cette dispersion importante traduit une variabilité marquée des parcours et met en évidence que, si le service fonctionne de manière acceptable pour la plupart des patients, certains parcours sont fortement pénalisés par des périodes d’attente prolongées.
 
 L’analyse du ratio entre le temps d’attente et le temps total de séjour montre que l’attente représente une part significative du parcours patient.
-La médiane de ce ratio se situe autour de 40 %, avec une dispersion relativement limitée entre les patients.
+La médiane de ce ratio se situe autour de 30 %, avec une dispersion relativement limitée entre les patients.
 Ce résultat suggère que l’attente constitue une composante structurelle du fonctionnement du service, affectant de manière relativement homogène l’ensemble des patients, plutôt qu’un phénomène marginal limité à quelques cas isolés.
 
-Enfin, l’étude de la relation entre le temps d’attente et le temps total de séjour met en évidence une corrélation quasi linéaire très forte.
+Enfin, l’étude de la relation entre le temps d’attente et le temps total de séjour met en évidence une corrélation linéaire forte.
 Cette relation indique que l’allongement des temps de séjour est principalement dû à l’augmentation des temps d’attente, et non à une augmentation du temps d’activité.
 Ainsi, les patients ayant les séjours les plus longs sont avant tout ceux qui subissent les attentes les plus importantes, ce qui confirme le rôle central de l’attente dans la dégradation de la performance globale du service.
 
@@ -956,7 +956,7 @@ L’analyse du niveau d’occupation du service met en évidence une dynamique j
 Le niveau d’occupation instantané montre une montée progressive en début de matinée, suivie de deux phases de congestion distinctes.
 La première apparaît en fin de matinée, tandis que la seconde, plus prononcée, se situe en milieu d’après-midi.
 Le lissage sur une fenêtre de 2 heures permet de faire ressortir clairement ces tendances en atténuant les fluctuations de court terme.
-Le nombre maximal de patients présents simultanément atteint environ 15 à 16 patients.
+Le nombre maximal de patients présents simultanément atteint environ 20 patients.
 
 L’occupation moyenne sur l’ensemble de la journée est de 9,14 patients.
 Cette valeur,inférieure aux niveaux observés lors des pics, souligne une forte variabilité temporelle de la charge du système.
