@@ -49,7 +49,7 @@ Les différentes de ce tableau de données sont :
 
 ## **Devoir 1 - Travail demandé** : Exploration de Données Exploratoires
 
-Ce travail est à rendre pour le **25/01/2026** au format Rmd ou R (+pdf si besoin) avec pour titre "NOM_Prenom_FIE5-2-IOS-4-Devoir-1.\*"
+Ce travail est à rendre pour le **08/02/2026** au format Rmd ou R (+pdf si besoin) avec pour titre "NOM_Prenom_FIE5-2-IOS-4-Devoir-1.\*"
 
 Ce premier devoir consiste en une exploration initiale des données afin de : - Comprendre les données - Structurer les données - Effectuer une analyse descriptive des données - Synthétiser une vision du service d'Urologie
 
@@ -100,7 +100,7 @@ trace_example_1
 
 #### Réponse :
 
-*Entrez votre texte ici*
+*Ci-dessous le code R de formattage de la table :*
 
 ```{r answer 1.a}
 
@@ -265,26 +265,36 @@ df7 <- df6 %>%
 # Build final dataframe for patients
 final_df <- df7 %>%
   transmute(
-    ID,
+    ID = as.character(ID),
     TYPE,
     CURRENT_LOCATION = as.character(CURRENT_LOCATION),
     NEXT_LOCATION    = as.character(NEXT_LOCATION),
     CURRENT_OPERATION_NUMBER,
-    WITH_1,
-    WITH_2,
-    DATETIME_BEGIN = time,        
+    WITH_1 = as.character(WITH_1),
+    WITH_2 = as.character(WITH_2),
+    DATETIME_BEGIN = time,
     DATETIME_END   = next_time,
-    DISTANCE_PARCOURUE
+    DISTANCE_PARCOURUE = as.numeric(DISTANCE_PARCOURUE)
   )
 
 # final_df
 
-final_df <- final_df %>%
+final_df_ID_8 <- final_df %>%
   mutate(
     ID = as.character(ID),
     WITH_1 = as.character(WITH_1),
     WITH_2 = as.character(WITH_2)
-  )
+  ) %>% filter(ID == 8)
+
+final_df_ID_8
+```
+
+**Résultat :**
+
+A la suite des différentes étapes de préparation des données nous sommes arrivées à la table ci dessus, filtrée sur le patient ayant l'ID 8.
+Il est nécessaire maintenant de rajouter les acteurs dans cette table en inversant les données du tableaux puis en rajoutan les lignes correspondantes.
+
+```{r answer 1.b}
 
 # Create ACTOR entities based on patient interactions
 actors <- final_df %>%
@@ -319,12 +329,6 @@ actors <- final_df %>%
 trace_full <- bind_rows(final_df, actors) %>%
   arrange(ID, DATETIME_BEGIN)
 
-final_df <- final_df %>%
-  mutate(
-    ID     = as.character(ID),
-    WITH_1 = as.character(WITH_1),
-    WITH_2 = as.character(WITH_2)
-  )
 
 # Build actor activity, idle, and mirror traces
 actors_base <- final_df %>%
@@ -351,6 +355,7 @@ actors_base <- final_df %>%
   distinct(ID, CURRENT_OPERATION_NUMBER, DATETIME_BEGIN, .keep_all = TRUE) %>%
   arrange(ID, DATETIME_BEGIN)
 
+# Identify idle periods for each actor (end of previous activity to start of next one)
 actor_idle <- actors_base %>%
   group_by(ID) %>%
   arrange(CURRENT_OPERATION_NUMBER) %>%
@@ -375,6 +380,7 @@ actor_idle <- actors_base %>%
   ) %>%
   ungroup()
 
+# Create mirror events to explicitly represent interactions between patients and secondary actors
 actor_mirror <- final_df %>%
   filter(
     TYPE == "PATIENT",
@@ -404,7 +410,29 @@ trace_full_complete <- bind_rows(
 
 trace_full_complete
 
-# trace_full %>% filter(TYPE != "PATIENT")
+trace_full_complete %>% filter(TYPE != "PATIENT")
+```
+
+**Résultat :**
+
+On obtient donc une table avec les acteurs ajoutés et liés à leurs patients en récupérant l'ensemble de leurs déplacements et intéractions.
+On télécharge ensuite le CSV :
+
+```{r answer 1.a}
+
+trace_full_complete <- trace_full_complete %>%
+  mutate(
+    DATETIME_BEGIN = format(as.POSIXct(DATETIME_BEGIN, tz = "UTC"),
+                            "%Y-%m-%dT%H:%M:%SZ"),
+    DATETIME_END   = format(as.POSIXct(DATETIME_END,   tz = "UTC"),
+                            "%Y-%m-%dT%H:%M:%SZ")
+  )
+write.csv(
+  trace_full_complete,
+  file = "trace_full.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
 ```
 
 De plus, il vous est demandé d'identifier toutes les erreurs de données potentielles (s'il y en a) comme :
@@ -418,31 +446,33 @@ De plus, il vous est demandé d'identifier toutes les erreurs de données potent
 #### Réponse :
 
 ```{r answer 1.b}
-#_Entrez votre code R ici_
-
 library(readr)
-
-df <- read_csv2("local_data/trace_example_final.csv")
-
-df
-
-# a) Comptage des valeurs manquantes par colonne
-missing_summary <- sapply(df, function(x) sum(is.na(x)))
-print("Missing values per column:")
-print(missing_summary)
-
-# -----------------------------
-# b) Valeurs aberrantes
-#    (distances trop grandes ou temps trop longs)
-# -----------------------------
-
 library(dplyr)
 
+df <- read_csv2(
+  "local_data/trace_example_final.csv",
+  show_col_types = FALSE,
+  locale = locale(
+    decimal_mark = ",",
+    grouping_mark = "."
+  )
+)
+# df
+
+# a) Counting missing values by column
+missing_summary <- tibble(
+  Column = names(df),
+  Missing_Values = colSums(is.na(df))
+) %>%
+  arrange(desc(Missing_Values))
+
+missing_summary
+
+# b) Outliers (distances too great or times too long)
 # Create a new data frame with activity duration (in minutes)
 df_aberrant <- df %>%
   mutate(
-    duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins"))
-  )
+    duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins")))
 
 # Identify aberrant durations (negative or excessively long)
 df_aberrant_time <- df_aberrant %>%
@@ -452,10 +482,7 @@ df_aberrant_time <- df_aberrant %>%
 df_aberrant_distance <- df_aberrant %>%
   filter(DISTANCE_PARCOURUE < 0 | DISTANCE_PARCOURUE > 1000)
 
-# -----------------------------
-# c) Valeurs incohérentes
-#    (chevauchements de dates ou enchaînements incohérents)
-# -----------------------------
+# c) Inconsistent values (date overlaps or inconsistent sequences)
 
 # Incoherent dates: end before begin
 df_incoherent_dates <- df %>%
@@ -469,12 +496,24 @@ df_overlaps <- df %>%
   filter(DATETIME_BEGIN < previous_end) %>%
   ungroup()
 
-nrow(df_aberrant_time)
-nrow(df_aberrant_distance)
-nrow(df_incoherent_dates)
-nrow(df_overlaps)
-
+cat("Number of events with aberrant time values: ", nrow(df_aberrant_time), "\n")
+cat("Number of events with aberrant distance values: ", nrow(df_aberrant_distance), "\n")
+cat("Number of events with incoherent dates: ", nrow(df_incoherent_dates), "\n")
+cat("Number of overlapping events: ", nrow(df_overlaps), "\n")
 ```
+
+L’analyse de la qualité des données a permis d’identifier différents types de problèmes potentiels dans le jeu de données :
+
+1.   **Valeurs manquantes** : certaines colonnes présentent un nombre important de valeurs absentes, notamment `WITH_2` (2 790 valeurs manquantes) et `WITH_1` (2 028 valeurs manquantes), ce qui reflète l’absence d’interaction avec un acteur pour certaines opérations.
+    Les colonnes `CURRENT_OPERATION_NUMBER` et `DISTANCE_PARCOURUE` contiennent également des valeurs manquantes, tandis que les colonnes critiques comme `ID`, `TYPE`, `DATETIME_BEGIN` et `DATETIME_END` sont complètes.
+
+2.   **Valeurs aberrantes** : aucune valeur aberrante n’a été détectée pour les temps ou les distances, ce qui indique que les données numériques sont cohérentes avec les attentes opérationnelles.
+
+3.   **Valeurs incohérentes** : aucune incohérence dans l’enchaînement des dates ou des opérations n’a été identifiée, à l’exception de **136 chevauchements d’événements**, qui représentent des situations où deux événements se produisent simultanément pour une même entité.
+    Ces cas devront être étudiés plus en détail pour déterminer s’il s’agit d’un artefact de saisie ou d’un phénomène réel du processus.
+
+Le jeu de données est globalement de bonne qualité pour l’analyse de processus, avec des données critiques complètes et un nombre limité de chevauchements à examiner.
+Les valeurs manquantes pour les acteurs ou les distances peuvent être justifiées par la nature du processus et ne remettent pas en cause l’intégrité globale du log.
 
 ### Question 2) Dénombrements (/1)
 
@@ -492,20 +531,17 @@ N'hésitez pas à discuter brièvement de ces nombres notamment en les comparant
 
 #### Réponse :
 
-*Entrez votre texte ici*
-
 ```{r answer 2}
-#_Entrez votre code R ici_
 library(dplyr)
 
-# a) Nombre de patients uniques
+# a) Number of unique patients
 df_patients <- df %>%
   filter(TYPE == "PATIENT") %>%
   distinct(ID)
 
 n_patients <- nrow(df_patients)
 
-# b) Nombre d'acteurs uniques
+# b) Number of unique actors
 df_actors <- df %>%
   filter(TYPE == "ACTOR") %>%
   distinct(ID)
@@ -513,18 +549,18 @@ df_actors <- df %>%
 n_actors <- nrow(df_actors)
 
 
-# Nombre d'activités générales
+# Number of general activities
 df_counts <- read_excel("Log_Patient_URO_12112015.xlsx")
 df_activities_general <- df_counts %>%
   distinct(Activity_MACRO)
 n_activities_general <- nrow(df_activities_general)
 
-# Nombre d'activités détaillées
+# Number of detailed activities
 df_activities_detailed <- df_counts %>%
   distinct(Activity_DETAILS)
 n_activities_detailed <- nrow(df_activities_detailed)
 
-# Résumé
+# Summary
 summary_counts <- data.frame(
   Indicator = c(
     "Number of patients",
@@ -567,25 +603,28 @@ N'hésitez pas à discuter brièvement de son parcours.
 
 #### Réponse :
 
-*Entrez votre texte ici*
-
 ```{r answer 3}
-#_Entrez votre code R ici_
-
 library(readr)
 library(dplyr)
 
-#  Charger le fichier original
-df_original <- read_csv2("local_data/trace_example_final.csv")
+#  Upload the original file
+df_original <- read_csv2(
+  "local_data/trace_example_final.csv",
+  show_col_types = FALSE,
+  locale = locale(
+    decimal_mark = ",",
+    grouping_mark = "."
+  )
+)
 
 df_patients <- df_original %>%
   filter(TYPE == "PATIENT")
 
-#  Calculer la durée de chaque enregistrement (en minutes)
+# Calculate the duration of each recording (in minutes)
 df_patients <- df_patients %>%
   mutate(duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins")))
 
-#  Calculer le temps total et la distance totale par patient
+# Calculate the total time and total distance per patient
 df_patient_total <- df_patients %>%
   group_by(ID) %>%
   summarise(
@@ -594,23 +633,41 @@ df_patient_total <- df_patients %>%
   ) %>%
   ungroup()
 
-#  Identifier le patient avec le temps de séjour le plus long
+# Identify the patient with the longest length of stay
 patient_longest <- df_patient_total %>%
   filter(total_duration_min == max(total_duration_min))
 
-print("Patient with the longest stay:")
-print(patient_longest)
+patient_longest_tbl <- patient_longest %>%
+  select(ID, total_duration_min, total_distance)
 
-# ⃣ Pour constater où se situe la cause (optionnel)
-# On peut afficher son parcours chronologique (toutes ses lignes)
+patient_longest_tbl
+
+# To see where the cause lies 
 df_long_patient <- df_patients %>%
   filter(ID == patient_longest$ID) %>%
   arrange(DATETIME_BEGIN)
 
 df_long_patient %>% as.data.frame() 
 
-
+write.csv(
+  df_long_patient,
+  file = "long_patient.csv",
+  row.names = FALSE,
+  fileEncoding = "UTF-8"
+)
 ```
+
+-   **Durée totale du séjour** : 354,25 minutes (\~5h54)
+
+-   **Distance totale parcourue** : 22 079,53 mètres (\~22 km)
+
+-    **Causes principales du long séjour** :
+
+    -   Temps d’attente cumulés dans les salles d’attente (`Uro_Attente_1`)
+
+    -   Examens et consultations (`Uro_Examen_2`, `Uro_Bureau_Annonce_1`)
+
+-   Les déplacements entre les lieux et les opérations rapides contribuent très peu à la durée totale.
 
 ### Question 4) Analyse des temps (/4)
 
@@ -627,74 +684,81 @@ N'hésitez pas à faire ressortir les faits les plus marquant et à discuter bri
 
 #### Réponse :
 
-*Entrez votre texte ici*
-
 ```{r answer 4}
-#_Entrez votre code R ici_
 
-library(readxl)
 library(dplyr)
 library(ggplot2)
+library(readr) 
 
-# Charger les fichiers
-df_original <- read_csv2("local_data/trace_example_final.csv")  # contient type
-df_counts   <- read_excel("Log_Patient_URO_12112015.xlsx")  # contient les colonnes Activity_GENERAL/DETAILS
+# Load the data
+df_original <- read_csv2(
+  "local_data/trace_example_final.csv",
+  show_col_types = FALSE,
+  locale = locale(
+    decimal_mark = ",",
+    grouping_mark = "."
+  )
+)
 
-# Faire un join pour combiner type et activités
-# Supposons que la colonne d'identifiant patient est "Patient_ID"
-df_counts$ID <- as.character(df_counts$ID)
+# Ensure that ID is a character
 df_original$ID <- as.character(df_original$ID)
 
-df_combined <- df_counts %>%
-  left_join(df_original %>% select(ID, TYPE, DATETIME_BEGIN, DATETIME_END), by = "ID")
-
-df_combined
-
-# Filtrer uniquement les patients
-df_patients <- df_combined %>%
+# Filter only patients and calculate duration per event
+df_patients <- df_original %>%
   filter(TYPE == "PATIENT") %>%
   mutate(duration_min = as.numeric(difftime(DATETIME_END, DATETIME_BEGIN, units = "mins")))
 
-# Calculer temps total, temps d'attente et temps d'activité par patient
+# Summary per patient: total time, waiting time, and activity time
 df_time_summary <- df_patients %>%
   group_by(ID) %>%
   summarise(
-    total_time = sum(duration_min, na.rm = TRUE),
-    waiting_time = sum(duration_min[grepl("Attente", Activity_MACRO,  ignore.case = TRUE)], na.rm = TRUE),
-    activity_time = sum(duration_min[!grepl("Attente", Activity_MACRO, ignore.case = TRUE)], na.rm = TRUE),
+    total_time    = sum(duration_min, na.rm = TRUE),
+    waiting_time  = sum(duration_min[grepl("Attente", CURRENT_LOCATION, ignore.case = TRUE)], na.rm = TRUE),
+    activity_time = sum(duration_min[!grepl("Attente", CURRENT_LOCATION, ignore.case = TRUE)], na.rm = TRUE),
     waiting_ratio = waiting_time / total_time
   ) %>%
   ungroup()
 
-# Résumé des résultats
+# Summary
+df_time_summary
 summary(df_time_summary)
 
-# Visualisations
+# Histogram of total length of stay
 ggplot(df_time_summary, aes(x = total_time)) +
   geom_histogram(bins = 30, fill = "steelblue", color = "black") +
-  labs(title = "Distribution du temps total de séjour des patients", x = "Temps total (min)", y = "Nombre de patients")
+  labs(title = "Distribution du temps total de séjour des patients", 
+       x = "Temps total (min)", y = "Nombre de patients") +
+  theme_minimal()
 
+# Histogram of waiting time
 ggplot(df_time_summary, aes(x = waiting_time)) +
   geom_histogram(bins = 30, fill = "orange", color = "black") +
-  labs(title = "Distribution du temps d'attente des patients", x = "Temps d'attente (min)", y = "Nombre de patients")
+  labs(title = "Distribution du temps d'attente des patients", 
+       x = "Temps d'attente (min)", y = "Nombre de patients") +
+  theme_minimal()
 
+# Boxplot of the ratio of waiting time to total time
 ggplot(df_time_summary, aes(y = waiting_ratio)) +
   geom_boxplot(fill = "purple", color = "black") +
-  labs(title = "Ratio temps d'attente / temps total par patient", y = "Ratio")
+  labs(title = "Ratio temps d'attente / temps total par patient", y = "Ratio") +
+  theme_minimal()
 
+# Scatter plot of total time vs. waiting time
 ggplot(df_time_summary, aes(x = total_time, y = waiting_time)) +
-  geom_point(alpha = 0.6) +
+  geom_point(alpha = 0.6, color = "darkgreen") +
   geom_smooth(method = "lm", se = FALSE, color = "red") +
-  labs(title = "Temps d'attente en fonction du temps total de séjour", x = "Temps total (min)", y = "Temps d'attente (min)")
+  labs(title = "Temps d'attente en fonction du temps total de séjour", 
+       x = "Temps total (min)", y = "Temps d'attente (min)") +
+  theme_minimal()
 
 
 ```
 
-#### Analyse
+#### Analyse :
 
 L’analyse de la distribution du temps total de séjour des patients met en évidence une forte asymétrie.
-La majorité des patients présente un temps de séjour inférieur à 2000 minutes, avec un pic marqué autour de 500 minutes, correspondant au fonctionnement nominal du service pour la plupart des parcours.
-Toutefois, la présence de quelques cas extrêmes, avec des durées de séjour atteignant près de 5000 et plus de 6000 minutes, révèle des situations atypiques susceptibles d’indiquer des phénomènes de congestion ou des dysfonctionnements ponctuels du processus.
+La majorité des patients présente un temps de séjour inférieur à 200 minutes, avec un pic marqué autour de 50 minutes, correspondant au fonctionnement nominal du service pour la plupart des parcours.
+Toutefois, la présence de quelques cas extrêmes, avec des durées de séjour atteignant près de 350 minutes comme nous avons pu le voir dans la question précédente, révèle des situations atypiques susceptibles d’indiquer des phénomènes de congestion ou des dysfonctionnements ponctuels du processus.
 Ces cas extrêmes contribuent significativement à l’augmentation de la moyenne globale.
 
 La distribution du temps d’attente des patients présente une forme similaire, fortement asymétrique, avec une majorité de patients subissant des temps d’attente modérés, mais une minorité exposée à des attentes très élevées.
@@ -724,10 +788,7 @@ Il vous est demandé de faire les mêmes analyses sur le nombre d'arrivées et d
 
 #### Réponse :
 
-*Entrez votre texte ici*
-
 ```{r answer 5}
-
 library(readr)
 library(dplyr)
 library(lubridate)
@@ -735,19 +796,26 @@ library(tidyr)
 library(zoo)
 library(ggplot2)
 
-## Niveau d'occupation à chaque instant et lissé.
+## Occupancy level at each moment, smoothed
 
-# 1) Lecture des données
-df <- read_csv2("local_data/trace_example_final.csv")
+# 1) Read data
+df <- df_original <- read_csv2(
+  "local_data/trace_example_final.csv",
+  show_col_types = FALSE,
+  locale = locale(
+    decimal_mark = ",",
+    grouping_mark = "."
+  )
+)
 
-# 2) Conversion des dates + fuseau horaire
+# 2) Convert dates + timezone
 df <- df %>%
   mutate(
     DATETIME_BEGIN = with_tz(ymd_hms(DATETIME_BEGIN, tz = "UTC"), "Europe/Paris"),
     DATETIME_END   = with_tz(ymd_hms(DATETIME_END,   tz = "UTC"), "Europe/Paris")
   )
 
-# 3) Construction des séjours par patient
+# 3) Build stays per patient
 sejours_service <- df %>%
   filter(TYPE == "PATIENT") %>%
   group_by(ID) %>%
@@ -757,7 +825,7 @@ sejours_service <- df %>%
     .groups = "drop"
   )
 
-# 4) Transformation en événements
+# 4) Transform into events
 arrivals <- sejours_service %>%
   transmute(datetime = entree, event =  1)
 
@@ -767,11 +835,20 @@ departures <- sejours_service %>%
 df_events <- bind_rows(arrivals, departures) %>%
   arrange(datetime)
 
-# 5) Occupation instantanée
+# 5) Instantaneous occupancy
 df_occupation <- df_events %>%
   mutate(occupation = cumsum(event))
 
-# 6) Mise sur grille temporelle
+# 6) Create a time grid (1-minute intervals)
+time_grid <- tibble(
+  datetime = seq(
+    from = min(df_occupation$datetime),
+    to   = max(df_occupation$datetime),
+    by   = "1 min"
+  )
+)
+
+# 7) Map occupation onto the grid
 df_occupation_grid <- time_grid %>%
   mutate(
     occupation = df_occupation$occupation[
@@ -782,18 +859,18 @@ df_occupation_grid <- time_grid %>%
     occupation = ifelse(is.na(occupation), 0, occupation)
   )
 
-# 7) Lissage sur 2 heures 
+# 8) 2-hour smoothing
 df_occupation_grid <- df_occupation_grid %>%
   mutate(
     occupation_2h = rollmean(
       occupation,
-      k = 24,
+      k = 24,        # 24 x 5 min = 2 hours if time step = 5 min, adjust if needed
       align = "center",
       fill = NA
     )
   )
 
-# 8) Visualisation
+# 9) Visualization (labels in French)
 ggplot(df_occupation_grid, aes(x = datetime)) +
   geom_line(aes(y = occupation), 
             color = "grey70", 
@@ -808,10 +885,9 @@ ggplot(df_occupation_grid, aes(x = datetime)) +
     y = "Nombre de patients présents"
   )
 
-## Niveau d'occupation par bloc de 2h
+## Occupancy level per 2-hour block
 
-# Mise sur grille par bloc de 2h
-
+# Map onto 2-hour blocks
 occupation_2h_blocs <- df_occupation_grid %>%
   mutate(
     bloc_2h = floor_date(datetime, unit = "2 hours")
@@ -822,8 +898,7 @@ occupation_2h_blocs <- df_occupation_grid %>%
     .groups = "drop"
   )
 
-# Visualisation
-
+# Visualization (labels in French)
 ggplot(occupation_2h_blocs, aes(x = bloc_2h, y = nb_patients_moyen)) +
   geom_col(fill = "steelblue") +
   labs(
@@ -832,7 +907,7 @@ ggplot(occupation_2h_blocs, aes(x = bloc_2h, y = nb_patients_moyen)) +
     y = "Patients (moyenne sur 2h)"
   )
 
-## Niveau d'occupation moyen sur la journée
+## Average occupancy over the day
 
 occupation_journee <- df_occupation_grid %>%
   summarise(
@@ -846,7 +921,7 @@ tableau_occupation_jour <- df_occupation_grid %>%
 
 tableau_occupation_jour
 
-## Analyse départs et arrivées
+## Analysis of arrivals and departures
 
 arrivees_2h <- arrivals %>%
   mutate(bloc_2h = floor_date(datetime, "2 hours")) %>%
@@ -857,9 +932,10 @@ departs_2h <- departures %>%
   count(bloc_2h, name = "nb_departs")
 
 flux_2h <- full_join(arrivees_2h, departs_2h, by = "bloc_2h") %>%
-  replace_na(list(nb_arrivees = 0, nb_departs = 0))%>%
+  replace_na(list(nb_arrivees = 0, nb_departs = 0)) %>%
   mutate(flux_net = nb_arrivees - nb_departs)
 
+# Visualization (labels in French)
 ggplot(flux_2h, aes(x = bloc_2h)) +
   geom_col(aes(y = nb_arrivees), fill = "darkgreen") +
   geom_col(aes(y = -nb_departs), fill = "firebrick") +
@@ -868,8 +944,6 @@ ggplot(flux_2h, aes(x = bloc_2h)) +
     x = "Créneau horaire",
     y = "Flux de patients (+ arrivées / − départs)"
   )
-
-
 
 ```
 
@@ -880,9 +954,9 @@ L’analyse du niveau d’occupation du service met en évidence une dynamique j
 Le niveau d’occupation instantané montre une montée progressive en début de matinée, suivie de deux phases de congestion distinctes.
 La première apparaît en fin de matinée, tandis que la seconde, plus prononcée, se situe en milieu d’après-midi.
 Le lissage sur une fenêtre de 2 heures permet de faire ressortir clairement ces tendances en atténuant les fluctuations de court terme.
-Le nombre maximal de patients présents simultanément atteint environ 14 à 15 patients.
+Le nombre maximal de patients présents simultanément atteint environ 15 à 16 patients.
 
-L’occupation moyenne sur l’ensemble de la journée est de 9,07 patients.
+L’occupation moyenne sur l’ensemble de la journée est de 9,14 patients.
 Cette valeur,inférieure aux niveaux observés lors des pics, souligne une forte variabilité temporelle de la charge du système.
 Le service fonctionne donc une part significative du temps au-dessus de sa charge moyenne, ce qui peut constituer un facteur de tension opérationnelle lors des périodes de pointe.
 
@@ -902,11 +976,19 @@ On considéra que les acteurs arrivent dans le service 5 min avant leur premièr
 
 #### Réponse :
 
-*Entrez votre texte ici*
-
 ```{r answer 6}
-#_Entrez votre code R ici_
-df_original <- read_csv2("local_data/trace_example_final.csv") 
+library(ggplot2)
+library(lubridate)
+
+df_original <- df_original <- read_csv2(
+  "local_data/trace_example_final.csv",
+  show_col_types = FALSE,
+  locale = locale(
+    decimal_mark = ",",
+    grouping_mark = "."
+  )
+)
+
 df_actors_loc <- df_original %>%
   filter(TYPE == "ACTOR") %>%
   mutate(
@@ -923,10 +1005,8 @@ df_actors_loc <- df_original %>%
 
 df_actors_loc
 
-# Vérification
+# Verification
 table(df_actors_loc$ACTOR_TYPE_INFERRED)
-
-library(lubridate)
 
 df_actor_presence <- df_actors_loc %>%
   group_by(ID, ACTOR_TYPE_INFERRED) %>%
@@ -953,7 +1033,6 @@ df_actor_summary <- df_actor_presence %>%
 
 df_actor_summary
 
-library(ggplot2)
 
 ggplot(df_actor_presence,
        aes(x = ACTOR_TYPE_INFERRED, y = total_presence_min)) +
