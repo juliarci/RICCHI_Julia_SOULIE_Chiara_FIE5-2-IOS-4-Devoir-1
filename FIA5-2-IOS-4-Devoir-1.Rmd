@@ -504,12 +504,12 @@ cat("Number of overlapping events: ", nrow(df_overlaps), "\n")
 
 L’analyse de la qualité des données a permis d’identifier différents types de problèmes potentiels dans le jeu de données :
 
-1.   **Valeurs manquantes** : certaines colonnes présentent un nombre important de valeurs absentes, notamment `WITH_2` (2 790 valeurs manquantes) et `WITH_1` (2 028 valeurs manquantes), ce qui reflète l’absence d’interaction avec un acteur pour certaines opérations.
+1.  **Valeurs manquantes** : certaines colonnes présentent un nombre important de valeurs absentes, notamment `WITH_2` (2 790 valeurs manquantes) et `WITH_1` (2 028 valeurs manquantes), ce qui reflète l’absence d’interaction avec un acteur pour certaines opérations.
     Les colonnes `CURRENT_OPERATION_NUMBER` et `DISTANCE_PARCOURUE` contiennent également des valeurs manquantes, tandis que les colonnes critiques comme `ID`, `TYPE`, `DATETIME_BEGIN` et `DATETIME_END` sont complètes.
 
-2.   **Valeurs aberrantes** : aucune valeur aberrante n’a été détectée pour les temps ou les distances, ce qui indique que les données numériques sont cohérentes avec les attentes opérationnelles.
+2.  **Valeurs aberrantes** : aucune valeur aberrante n’a été détectée pour les temps ou les distances, ce qui indique que les données numériques sont cohérentes avec les attentes opérationnelles.
 
-3.   **Valeurs incohérentes** : aucune incohérence dans l’enchaînement des dates ou des opérations n’a été identifiée, à l’exception de **136 chevauchements d’événements**, qui représentent des situations où deux événements se produisent simultanément pour une même entité.
+3.  **Valeurs incohérentes** : aucune incohérence dans l’enchaînement des dates ou des opérations n’a été identifiée, à l’exception de **136 chevauchements d’événements**, qui représentent des situations où deux événements se produisent simultanément pour une même entité.
     Ces cas devront être étudiés plus en détail pour déterminer s’il s’agit d’un artefact de saisie ou d’un phénomène réel du processus.
 
 Le jeu de données est globalement de bonne qualité pour l’analyse de processus, avec des données critiques complètes et un nombre limité de chevauchements à examiner.
@@ -661,11 +661,13 @@ write.csv(
 
 -   **Distance totale parcourue** : 22 079,53 mètres (\~22 km)
 
--    **Causes principales du long séjour** :
+-   **Causes principales du long séjour** :
 
-    -   Temps d’attente cumulés dans les salles d’attente (`Uro_Attente_1`)
+```         
+-   Temps d’attente cumulés dans les salles d’attente (`Uro_Attente_1`)
 
-    -   Examens et consultations (`Uro_Examen_2`, `Uro_Bureau_Annonce_1`)
+-   Examens et consultations (`Uro_Examen_2`, `Uro_Bureau_Annonce_1`)
+```
 
 -   Les déplacements entre les lieux et les opérations rapides contribuent très peu à la durée totale.
 
